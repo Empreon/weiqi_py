@@ -58,9 +58,8 @@ class Board:
         return visited
     
     @lru_cache(maxsize=1024)
-    def _get_liberties(self, group_hash: str) -> set[tuple[int, int]]:
+    def _get_liberties(self, group: frozenset[tuple[int, int]]) -> set[tuple[int, int]]:
         """Count the liberties (empty adjacent points) of a group"""
-        group = eval(group_hash)  # Convert string back to set
         liberties = set() 
         for y, x in group:
             for dy, dx in DIRECTIONS:
@@ -80,12 +79,12 @@ class Board:
             ny, nx = y + dy, x + dx
             if self.board[ny, nx] == opponent:
                 group = self._get_group(ny, nx)
-                liberties = self._get_liberties(str(group))
+                liberties = self._get_liberties(frozenset(group))
                 if not liberties:
                     captured = True
         if not captured:
             own_group = self._get_group(y, x)
-            own_liberties = self._get_liberties(str(own_group))
+            own_liberties = self._get_liberties(frozenset(own_group))
             if not own_liberties:
                 self.board[y, x] = EMPTY # Undo the temporary move
                 return False
@@ -109,7 +108,7 @@ class Board:
             ny, nx = y + dy, x + dx
             if self.board[ny, nx] == opponent:
                 group = self._get_group(ny, nx)
-                liberties = self._get_liberties(str(group))
+                liberties = self._get_liberties(frozenset(group))
                 if not liberties:
                     for gy, gx in group:
                         # Update Zobrist hash by removing stones
