@@ -2,7 +2,7 @@ from copy import deepcopy
 from .board import BLACK, WHITE, EMPTY
 
 class Move:
-    def __init__(self, y:int=None, x:int=None, color:int=None, is_pass:bool=False, is_resign:bool=False) -> None:
+    def __init__(self, y=None, x=None, color=None, is_pass=False, is_resign=False) -> None:
         self.y = y
         self.x = x
         self.color = color
