@@ -9,7 +9,7 @@ OFFBOARD = 3  # Used for padding
 DIRECTIONS = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
 class Board:
-    def __init__(self, size=19) -> None:
+    def __init__(self, size:int=19) -> None:
         self.size = size
         self.board = np.zeros((size + 2, size + 2), dtype=np.int8)
         self.board[0, :] = self.board[-1, :] = OFFBOARD
