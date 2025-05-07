@@ -9,7 +9,7 @@ OFFBOARD = 3  # Used for padding
 DIRECTIONS = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
 class Board:
-    def __init__(self, size:int=19) -> None:
+    def __init__(self, size=19) -> None:
         self.size = size
         self.board = np.zeros((size + 2, size + 2), dtype=np.int8)
         self.board[0, :] = self.board[-1, :] = OFFBOARD
@@ -17,11 +17,11 @@ class Board:
         self.black_captures = 0
         self.white_captures = 0
         self.position_history = set()
-        self._update_position_hash()
         # Initialize Zobrist hash table for fast position hashing
         np.random.seed(0)
         self.zobrist_table = np.random.randint(1, 2**63 - 1, size=(size + 2, size + 2, 3), dtype=np.int64)
         self.current_hash = 0
+        self._update_position_hash()  # Now call this after initializing the hash table
         
     def _update_position_hash(self) -> None:
         """Update and store the current board position hash"""
@@ -29,8 +29,7 @@ class Board:
         for y in range(1, self.size + 1):
             for x in range(1, self.size + 1):
                 stone = self.board[y, x]
-                if stone > 0:  # If there's a stone
-                    self.current_hash ^= self.zobrist_table[y, x, stone - 1]
+                if stone > 0: self.current_hash ^= self.zobrist_table[y, x, stone - 1]
         self.position_history.add(self.current_hash)
     
     def reset(self) -> None:
@@ -47,26 +46,24 @@ class Board:
         color = self.board[y, x]
         if color == EMPTY or color == OFFBOARD: return set()
         visited = set()
-        queue = deque[(y, x)]
+        queue = deque([(y, x)])
         while queue:
-            cy, cx = queue.popleft(0)
+            cy, cx = queue.popleft()
             if (cy, cx) in visited: continue
             visited.add((cy, cx))
             for dy, dx in DIRECTIONS:
                 ny, nx = cy + dy, cx + dx
-                if (self.board[ny, nx] == color and (ny, nx) not in visited):
-                    queue.append((ny, nx))
+                if (self.board[ny, nx] == color and (ny, nx) not in visited): queue.append((ny, nx))
         return visited
     
-    @lru_cache(maxsize=1024)
+    @lru_cache(maxsize=4096)
     def _get_liberties(self, group: frozenset[tuple[int, int]]) -> set[tuple[int, int]]:
         """Count the liberties (empty adjacent points) of a group"""
-        liberties = set() 
+        liberties = set()
         for y, x in group:
             for dy, dx in DIRECTIONS:
                 ny, nx = y + dy, x + dx
-                if self.board[ny, nx] == EMPTY:
-                    liberties.add((ny, nx))
+                if self.board[ny, nx] == EMPTY: liberties.add((ny, nx))
         return liberties
     
     def is_valid_move(self, y: int, x: int, color: int) -> bool:
@@ -139,4 +136,4 @@ class Board:
                 elif self.board[y, x] == BLACK: result += "B "
                 elif self.board[y, x] == WHITE: result += "W "
             result += "\n"
-        return result 
+        return result
