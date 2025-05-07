@@ -1,5 +1,6 @@
 import numpy as np
 from functools import lru_cache
+from collections import deque
 
 EMPTY = 0
 BLACK = 1
@@ -46,9 +47,9 @@ class Board:
         color = self.board[y, x]
         if color == EMPTY or color == OFFBOARD: return set()
         visited = set()
-        queue = [(y, x)]
+        queue = deque[(y, x)]
         while queue:
-            cy, cx = queue.pop(0)
+            cy, cx = queue.popleft(0)
             if (cy, cx) in visited: continue
             visited.add((cy, cx))
             for dy, dx in DIRECTIONS:
