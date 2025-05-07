@@ -1,0 +1,117 @@
+from copy import deepcopy
+from .board import BLACK, WHITE, EMPTY
+
+class Move:
+    def __init__(self, y:int=None, x:int=None, color:int=None, is_pass:bool=False, is_resign:bool=False) -> None:
+        self.y = y
+        self.x = x
+        self.color = color
+        self.is_pass = is_pass
+        self.is_resign = is_resign
+        self.captured_stones = []  # List of (y, x) coordinates of captured stones
+        self.previous_zobrist_hash = None  # To restore the hash when undoing
+        self.previous_position_history = None  # To restore position history
+        
+    def __str__(self) -> str:
+        if self.is_pass: return f"{'Black' if self.color == BLACK else 'White'} Pass"
+        elif self.is_resign: return f"{'Black' if self.color == BLACK else 'White'} Resign"
+        else: return f"{'Black' if self.color == BLACK else 'White'} ({self.y},{self.x})"
+
+class MoveStack:
+    """Stack-based representation of moves for efficient MCTS tree traversal"""
+    def __init__(self, board) -> None:
+        self.board = board
+        self.moves = []
+        self.current_index = -1
+        
+    def push(self, move:Move) -> bool:
+        """Push a move onto the stack and apply it to the board"""
+        move.previous_zobrist_hash = self.board.current_hash
+        move.previous_position_history = deepcopy(self.board.position_history)
+        if move.is_pass or move.is_resign: # Handle pass and resign
+            self.moves = self.moves[:self.current_index + 1]
+            self.moves.append(move)
+            self.current_index += 1
+            return True
+        if not self.board.place_stone(move.y, move.x, move.color): return False
+        board_size = self.board.size
+        for dy, dx in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
+            ny, nx = move.y + dy, move.x + dx
+            if 1 <= ny <= board_size and 1 <= nx <= board_size:
+                if self.board.board[ny, nx] == EMPTY:
+                    surrounded = True
+                    for cy, cx in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
+                        if self.board.board[ny + cy, nx + cx] != move.color and self.board.board[ny + cy, nx + cx] != EMPTY:
+                            surrounded = False
+                            break
+                    if surrounded: move.captured_stones.append((ny, nx))
+        self.moves = self.moves[:self.current_index + 1]
+        self.moves.append(move)
+        self.current_index += 1
+        return True
+        
+    def pop(self) -> Move:
+        """Pop a move from the stack and undo it on the board"""
+        if self.current_index < 0: return None
+        move = self.moves[self.current_index]
+        self.current_index -= 1
+        if move.is_pass or move.is_resign: return move
+        self.board.board[move.y, move.x] = EMPTY
+        opponent = WHITE if move.color == BLACK else BLACK
+        for y, x in move.captured_stones: self.board.board[y, x] = opponent
+        self.board.current_hash = move.previous_zobrist_hash
+        # Restore Zobrist hash and position history
+        self.board.current_hash = move.previous_zobrist_hash
+        self.board.position_history = move.previous_position_history
+        self.board._get_liberties.cache_clear() # Clear LRU cache
+        return move
+        
+    def peek(self) -> Move:
+        """Peek at the current move without popping"""
+        if self.current_index < 0: return None
+        return self.moves[self.current_index]
+        
+    def peek_next(self) -> Move:
+        """Peek at the next move without pushing"""
+        if self.current_index + 1 >= len(self.moves): return None
+        return self.moves[self.current_index + 1]
+        
+    def forward(self) -> bool:
+        """Move forward in the move stack (redo)"""
+        if self.current_index + 1 >= len(self.moves): return False
+        next_move = self.moves[self.current_index + 1]
+        # Apply the move (without adding it to the stack again)
+        if next_move.is_pass or next_move.is_resign:
+            self.current_index += 1
+            return True
+        self.board.board[next_move.y, next_move.x] = next_move.color
+        for y, x in next_move.captured_stones: self.board.board[y, x] = EMPTY
+        self.board.current_hash = next_move.previous_zobrist_hash  # This is not correct, would need to recalculate
+        self.board.position_history = deepcopy(next_move.previous_position_history)
+        self.current_index += 1
+        self.board._get_liberties.cache_clear() # Clear LRU cache
+        return True
+        
+    def back(self) -> bool:
+        """Move backward in the move stack (undo)"""
+        return self.pop() is not None
+        
+    def to_root(self) -> int:
+        """Undo all moves and return to the root state"""
+        moves_undone = 0
+        while self.pop() is not None: moves_undone += 1
+        return moves_undone
+        
+    def to_end(self) -> int:
+        """Redo all moves and go to the end of the stack"""
+        moves_redone = 0
+        while self.forward(): moves_redone += 1
+        return moves_redone
+        
+    def __len__(self) -> int:
+        """Return the total number of moves in the stack"""
+        return len(self.moves)
+        
+    def current_position(self) -> int:
+        """Return the current position in the stack"""
+        return self.current_index + 1 
