@@ -1,9 +1,9 @@
 import numpy as np
 from .board import Board, BLACK, WHITE, EMPTY
-from .move_stack import Move, MoveStack
+from .move import Move, MoveStack
 
 class Game:
-    def __init__(self, board_size:int=19, komi:float=6.5, score_system:str="area") -> None:
+    def __init__(self, board_size=19, komi=6.5, score_system="area") -> None:
         self.board = Board(size=board_size)
         self.current_player = BLACK  # Black goes first
         self.komi = komi
