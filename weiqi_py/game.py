@@ -56,7 +56,7 @@ class Game:
         elif self.score_system == "territory": return self._get_territory_score()
         else: raise ValueError(f"Invalid score system: {self.score_system}")
     
-    def _flood_fill(self, board, size, visited, y, x, color) -> tuple[int, int]:
+    def _flood_fill(self, board, size:int, visited, y:int, x:int, color:int) -> tuple[int, int]:
         """Common flood fill function for both scoring methods"""
         if y < 1 or y > size or x < 1 or x > size or visited[y, x] or board[y, x] != EMPTY: return 0, None
         visited[y, x] = True
