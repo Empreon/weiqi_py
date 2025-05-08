@@ -1,5 +1,5 @@
 from copy import deepcopy
-from .board import BLACK, WHITE, EMPTY
+from .board import BLACK, WHITE, EMPTY, DIRECTIONS
 
 class Move:
     def __init__(self, y=None, x=None, color=None, is_pass=False, is_resign=False) -> None:
@@ -33,18 +33,20 @@ class MoveStack:
             self.moves.append(move)
             self.current_index += 1
             return True
-        if not self.board.place_stone(move.y, move.x, move.color): return False
-        board_size = self.board.size
-        for dy, dx in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
+        opponent = WHITE if move.color == BLACK else BLACK
+        potential_captures = []
+        temp_board = self.board.board.copy()
+        temp_board[move.y, move.x] = move.color
+        for dy, dx in DIRECTIONS:
             ny, nx = move.y + dy, move.x + dx
-            if 1 <= ny <= board_size and 1 <= nx <= board_size:
-                if self.board.board[ny, nx] == EMPTY:
-                    surrounded = True
-                    for cy, cx in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
-                        if self.board.board[ny + cy, nx + cx] != move.color and self.board.board[ny + cy, nx + cx] != EMPTY:
-                            surrounded = False
-                            break
-                    if surrounded: move.captured_stones.append((ny, nx))
+            if 1 <= ny <= self.board.size and 1 <= nx <= self.board.size:
+                if temp_board[ny, nx] == opponent:
+                    group = self.board._get_group(ny, nx)
+                    liberties = self.board._get_liberties(frozenset(group))
+                    if len(liberties) == 1 and (move.y, move.x) in liberties: potential_captures.extend(group)
+        if not self.board.place_stone(move.y, move.x, move.color): return False
+        for y, x in potential_captures:
+            if self.board.board[y, x] == EMPTY: move.captured_stones.append((y, x))
         self.moves = self.moves[:self.current_index + 1]
         self.moves.append(move)
         self.current_index += 1
@@ -59,8 +61,7 @@ class MoveStack:
         self.board.board[move.y, move.x] = EMPTY
         opponent = WHITE if move.color == BLACK else BLACK
         for y, x in move.captured_stones: self.board.board[y, x] = opponent
-        self.board.current_hash = move.previous_zobrist_hash
-        # Restore Zobrist hash and position history
+        # Restore Zobrist hash and position history (fixed redundant assignment)
         self.board.current_hash = move.previous_zobrist_hash
         self.board.position_history = move.previous_position_history
         self.board._get_liberties.cache_clear() # Clear LRU cache
