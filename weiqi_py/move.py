@@ -85,9 +85,15 @@ class MoveStack:
             self.current_index += 1
             return True
         self.board.board[next_move.y, next_move.x] = next_move.color
-        for y, x in next_move.captured_stones: self.board.board[y, x] = EMPTY
-        self.board.current_hash = next_move.previous_zobrist_hash  # This is not correct, would need to recalculate
+        # Recalculate Zobrist hash
+        self.board.current_hash = next_move.previous_zobrist_hash
+        self.board.current_hash ^= self.board.zobrist_table[next_move.y, next_move.x, next_move.color - 1]
+        opponent = WHITE if next_move.color == BLACK else BLACK
+        for y, x in next_move.captured_stones: # Handle captures
+            self.board.board[y, x] = EMPTY
+            self.board.current_hash ^= self.board.zobrist_table[y, x, opponent - 1]
         self.board.position_history = deepcopy(next_move.previous_position_history)
+        self.board.position_history.add(self.board.current_hash)
         self.current_index += 1
         self.board._get_liberties.cache_clear() # Clear LRU cache
         return True
