@@ -3,6 +3,7 @@ from datetime import datetime
 from .board import BLACK, WHITE, EMPTY
 from .game import Game
 from .move import Move
+from .utils import coord_to_sgf, sgf_to_coord
 
 class SGFNode:
     def __init__(self, parent=None) -> None:
@@ -88,8 +89,7 @@ class SGFParser:
                 stones = sgf_root.get_property_list('AB') # Get handicap stones
                 for stone in stones:
                     if not stone: continue
-                    col = ord(stone[0]) - ord('a') + 1
-                    row = ord(stone[1]) - ord('a') + 1
+                    row, col = sgf_to_coord(stone, board_size)
                     if 1 <= row <= board_size and 1 <= col <= board_size: game.board.place_stone(row, col, BLACK)
                 game.current_player = WHITE # White moves first after handicap
         invalid_moves_count = 0
@@ -107,8 +107,7 @@ class SGFParser:
                 else: print(f"Warning: Skipping pass move for {color}, expected {game.current_player}")
                 continue
             try:
-                col = ord(move_str[0]) - ord('a') + 1
-                row = ord(move_str[1]) - ord('a') + 1
+                row, col = sgf_to_coord(move_str, board_size)
                 if not (1 <= row <= board_size and 1 <= col <= board_size):
                     print(f"Warning: Invalid coordinates ({row},{col}), skipping")
                     invalid_moves_count += 1
@@ -143,12 +142,12 @@ class SGFParser:
             if move == "pass":
                 if current_color == BLACK: node.add_property('B', '')
                 else: node.add_property('W', '')
+            elif move == "resign": pass
             else:
                 y, x = move
-                col = chr(ord('a') + x - 1)
-                row = chr(ord('a') + y - 1)
-                if current_color == BLACK: node.add_property('B', col + row)
-                else: node.add_property('W', col + row)
+                sgf_coord = coord_to_sgf(y, x, game.board.size)
+                if current_color == BLACK: node.add_property('B', sgf_coord)
+                else: node.add_property('W', sgf_coord)
             current_node = node
             current_color = BLACK if current_color == WHITE else WHITE
         if game.is_game_over:
