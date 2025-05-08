@@ -53,7 +53,8 @@ class Board:
             visited.add((cy, cx))
             for dy, dx in DIRECTIONS:
                 ny, nx = cy + dy, cx + dx
-                if (self.board[ny, nx] == color and (ny, nx) not in visited): queue.append((ny, nx))
+                if 0 <= ny < self.size + 2 and 0 <= nx < self.size + 2:
+                    if (self.board[ny, nx] == color and (ny, nx) not in visited): queue.append((ny, nx))
         return visited
     
     @lru_cache(maxsize=4096)
@@ -63,7 +64,8 @@ class Board:
         for y, x in group:
             for dy, dx in DIRECTIONS:
                 ny, nx = y + dy, x + dx
-                if self.board[ny, nx] == EMPTY: liberties.add((ny, nx))
+                if 0 <= ny < self.size + 2 and 0 <= nx < self.size + 2: 
+                    if self.board[ny, nx] == EMPTY: liberties.add((ny, nx))
         return liberties
     
     def is_valid_move(self, y: int, x: int, color: int) -> bool:
