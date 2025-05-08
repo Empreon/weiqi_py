@@ -70,29 +70,41 @@ class Board:
         """Check if placing a stone at (y, x) is a valid move"""
         if not (1 <= y <= self.size and 1 <= x <= self.size): return False
         if self.board[y, x] != EMPTY: return False            
-        self.board[y, x] = color # Temporarily place the stone to check capture and suicide
-        opponent = WHITE if color == BLACK else BLACK # Check for captures
-        captured = False
+        temp_board = self.board.copy()
+        temp_board[y, x] = color
+        opponent = WHITE if color == BLACK else BLACK
+        captured_groups = []
         for dy, dx in DIRECTIONS:
             ny, nx = y + dy, x + dx
-            if self.board[ny, nx] == opponent:
+            if temp_board[ny, nx] == opponent:
                 group = self._get_group(ny, nx)
                 liberties = self._get_liberties(frozenset(group))
-                if not liberties:
-                    captured = True
-        if not captured:
-            own_group = self._get_group(y, x)
-            own_liberties = self._get_liberties(frozenset(own_group))
-            if not own_liberties:
-                self.board[y, x] = EMPTY # Undo the temporary move
-                return False
-        # Check for ko rule - simple ko only
-        # For superko, we'd check if the resulting position has been seen before
+                if not liberties:captured_groups.append(group)
+        for group in captured_groups:
+            for gy, gx in group: temp_board[gy, gx] = EMPTY
+        group = set()
+        queue = deque([(y, x)])
+        while queue:
+            cy, cx = queue.popleft()
+            if (cy, cx) in group: continue
+            group.add((cy, cx))
+            for dy, dx in DIRECTIONS:
+                ny, nx = cy + dy, cx + dx
+                if temp_board[ny, nx] == color and (ny, nx) not in group: queue.append((ny, nx))
+        has_liberties = False
+        for gy, gx in group:
+            for dy, dx in DIRECTIONS:
+                ny, nx = gy + dy, gx + dx
+                if temp_board[ny, nx] == EMPTY:
+                    has_liberties = True
+                    break
+            if has_liberties: break
+        if not has_liberties and not captured_groups: return False
+        # Check for positional superko - calculate the new board position hash
         new_hash = self.current_hash ^ self.zobrist_table[y, x, color - 1]
-        if new_hash in self.position_history:
-            self.board[y, x] = EMPTY
-            return False
-        self.board[y, x] = EMPTY
+        for group in captured_groups:
+            for gy, gx in group: new_hash ^= self.zobrist_table[gy, gx, opponent - 1]
+        if new_hash in self.position_history: return False  # Violates positional superko rule
         return True
     
     def place_stone(self, y: int, x: int, color: int) -> bool:
