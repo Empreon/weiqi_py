@@ -82,6 +82,17 @@ class SGFParser:
             except ValueError: pass  # Stick with default if parsing fails
         game = Game(board_size=board_size, komi=komi)
         current_node = sgf_root # Apply moves from the SGF (follow the main line)
+        if sgf_root.has_property('HA') and sgf_root.has_property('AB'):
+            handicap = int(sgf_root.get_property('HA'))
+            if handicap > 0:
+                stones = sgf_root.get_property_list('AB') # Get handicap stones
+                for stone in stones:
+                    if not stone: continue
+                    col = ord(stone[0]) - ord('a') + 1
+                    row = ord(stone[1]) - ord('a') + 1
+                    if 1 <= row <= board_size and 1 <= col <= board_size: game.board.place_stone(row, col, BLACK)
+                game.current_player = WHITE # White moves first after handicap
+        invalid_moves_count = 0
         while current_node.children:
             current_node = current_node.children[0]  # Follow first branch
             if current_node.has_property('B'):
@@ -92,11 +103,27 @@ class SGFParser:
                 move_str = current_node.get_property('W')
             else: continue  # No move in this node
             if not move_str or move_str == '':
-                game.play(None, None, color)
+                if game.current_player == color: game.play(None, None)
+                else: print(f"Warning: Skipping pass move for {color}, expected {game.current_player}")
                 continue
-            col = ord(move_str[0]) - ord('a') + 1
-            row = ord(move_str[1]) - ord('a') + 1
-            game.play(row, col, color)
+            try:
+                col = ord(move_str[0]) - ord('a') + 1
+                row = ord(move_str[1]) - ord('a') + 1
+                if not (1 <= row <= board_size and 1 <= col <= board_size):
+                    print(f"Warning: Invalid coordinates ({row},{col}), skipping")
+                    invalid_moves_count += 1
+                    continue
+                if game.current_player != color:
+                    print(f"Warning: Incorrect player turn (got {color}, expected {game.current_player}), skipping")
+                    invalid_moves_count += 1
+                    continue
+                if not game.play(row, col):
+                    print(f"Warning: Invalid move at ({row},{col}) for {color}, skipping")
+                    invalid_moves_count += 1
+            except Exception as e:
+                print(f"Error processing move {move_str}: {e}")
+                invalid_moves_count += 1
+        if invalid_moves_count > 0: print(f"Completed parsing with {invalid_moves_count} invalid/skipped moves")
         return game
         
     def game_to_sgf(self, game:Game) -> str:
