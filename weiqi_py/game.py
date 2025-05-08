@@ -117,7 +117,7 @@ class Game:
             else: raise ScoringError(f"Invalid score system: {self.score_system}")
         except Exception as e: raise ScoringError(f"Error calculating score: {e}")
     
-    def _optimized_flood_fill(self, board, size: int) -> tuple[float, float]:
+    def _optimized_flood_fill(self, board, size: int) -> tuple[float, float, float, float]:
         """Optimized flood fill for territory calculation using BFS"""
         black_mask = (board == BLACK)
         white_mask = (board == WHITE)
