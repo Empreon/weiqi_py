@@ -37,35 +37,14 @@ class Game:
                 self.current_player = BLACK if self.current_player == WHITE else WHITE
             return result
         if not isinstance(y, int) or not isinstance(x, int): raise InvalidMoveError(f"Invalid coordinates: ({y}, {x}).")
-        if not (1 <= y <= self.board.size and 1 <= x <= self.board.size): raise InvalidMoveError(f"Coordinates out of bounds: ({y}, {x}).")
-        if self.board.board[y, x] != EMPTY: raise InvalidMoveError(f"Position ({y}, {x}) is already occupied.")
+        is_valid, reason = self.board.is_valid_move(y, x, self.current_player)
+        if not is_valid: raise InvalidMoveError(f"Invalid move at ({y}, {x}): {reason}")
         move = Move(y=y, x=x, color=self.current_player)
         result = self.move_stack.push(move)
-        if not result:
-            if not self.board.is_valid_move(y, x, self.current_player):
-                if self._would_be_suicide(y, x, self.current_player): raise InvalidMoveError(f"Suicide move at ({y}, {x}).")
-                else: raise InvalidMoveError(f"Move at ({y}, {x}) violates ko rule.")
-            raise InvalidMoveError(f"Invalid move at ({y}, {x}) for unknown reason")
+        if not result: raise InvalidMoveError(f"Invalid move at ({y}, {x}): failed to apply move")
         self.moves_history.append((y, x))
         self.passes = 0
         self.current_player = BLACK if self.current_player == WHITE else WHITE
-        return True
-    
-    def _would_be_suicide(self, y: int, x: int, color: tuple[int, int]) -> bool:
-        """Determine if a move would be a suicide move"""
-        temp_board = self.board.board.copy()
-        temp_board[y, x] = color
-        group = set([(y, x)])
-        queue = [(y, x)]
-        while queue:
-            cy, cx = queue.pop(0)
-            for dy, dx in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
-                ny, nx = cy + dy, cx + dx
-                if temp_board[ny, nx] == EMPTY:
-                    return False
-                if temp_board[ny, nx] == color and (ny, nx) not in group:
-                    group.add((ny, nx))
-                    queue.append((ny, nx))
         return True
     
     def undo(self) -> bool:
