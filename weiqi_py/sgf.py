@@ -2,7 +2,6 @@ import re
 from datetime import datetime
 from .board import BLACK, WHITE, EMPTY
 from .game import Game
-from .move import Move
 from .utils import coord_to_sgf, sgf_to_coord
 
 class SGFNode:
@@ -75,33 +74,33 @@ class SGFParser:
         
     def sgf_to_game(self, sgf_root:SGFNode) -> Game:
         """Convert an SGF game tree to a Game object"""
-        board_size = 19  # Default to 19x19
+        board_size = 19
         if sgf_root.has_property('SZ'): board_size = int(sgf_root.get_property('SZ'))
-        komi = 6.5  # Default komi
+        komi = 6.5
         if sgf_root.has_property('KM'):
             try: komi = float(sgf_root.get_property('KM'))
-            except ValueError: pass  # Stick with default if parsing fails
+            except ValueError: pass
         game = Game(board_size=board_size, komi=komi)
-        current_node = sgf_root # Apply moves from the SGF (follow the main line)
+        current_node = sgf_root
         if sgf_root.has_property('HA') and sgf_root.has_property('AB'):
             handicap = int(sgf_root.get_property('HA'))
             if handicap > 0:
-                stones = sgf_root.get_property_list('AB') # Get handicap stones
+                stones = sgf_root.get_property_list('AB')
                 for stone in stones:
                     if not stone: continue
                     row, col = sgf_to_coord(stone, board_size)
                     if 1 <= row <= board_size and 1 <= col <= board_size: game.board.place_stone(row, col, BLACK)
-                game.current_player = WHITE # White moves first after handicap
+                game.current_player = WHITE
         invalid_moves_count = 0
         while current_node.children:
-            current_node = current_node.children[0]  # Follow first branch
+            current_node = current_node.children[0]
             if current_node.has_property('B'):
                 color = BLACK
                 move_str = current_node.get_property('B')
             elif current_node.has_property('W'):
                 color = WHITE
                 move_str = current_node.get_property('W')
-            else: continue  # No move in this node
+            else: continue
             if not move_str or move_str == '':
                 if game.current_player == color: game.play(None, None)
                 else: print(f"Warning: Skipping pass move for {color}, expected {game.current_player}")
@@ -128,14 +127,14 @@ class SGFParser:
     def game_to_sgf(self, game:Game) -> str:
         """Convert a Game object to SGF format"""
         root = SGFNode()
-        root.add_property('FF', '4')  # File format 4
-        root.add_property('GM', '1')  # Game type 1 (Go)
+        root.add_property('FF', '4')
+        root.add_property('GM', '1')
         root.add_property('SZ', str(game.board.size))
         root.add_property('KM', str(game.komi))
         root.add_property('DT', datetime.now().strftime('%Y-%m-%d'))
         root.add_property('RU', 'Japanese')
-        current_node = root # Create the main branch
-        current_color = BLACK  # Black goes first in Go
+        current_node = root
+        current_color = BLACK
         for move in game.moves_history:
             node = SGFNode(parent=current_node)
             current_node.add_child(node)
