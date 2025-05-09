@@ -64,6 +64,7 @@ class MoveStack:
         self.board.current_hash = move.previous_zobrist_hash
         self.board.position_history = move.previous_position_history
         self.board._get_liberties.cache_clear()
+        self.board._get_group.cache_clear()
         return move
         
     def peek(self) -> Move:
@@ -94,22 +95,20 @@ class MoveStack:
         self.board.position_history.add(self.board.current_hash)
         self.current_index += 1
         self.board._get_liberties.cache_clear()
+        self.board._get_group.cache_clear()
         return True
         
     def back(self) -> bool:
         """Move backward in the move stack (undo)"""
         return self.pop() is not None
         
-    def to_root(self) -> int:
+    def to_root(self) -> None:
         """Undo all moves and return to the root state"""
-        moves_undone = 0
-        while self.pop() is not None: moves_undone += 1
+        while self.pop() is not None: pass
         
-    def to_end(self) -> int:
+    def to_end(self) -> None:
         """Redo all moves and go to the end of the stack"""
-        moves_redone = 0
-        while self.forward(): moves_redone += 1
-        return moves_redone
+        while self.forward(): pass
         
     def __len__(self) -> int:
         """Return the total number of moves in the stack"""
