@@ -8,9 +8,9 @@ class Move:
         self.color = color
         self.is_pass = is_pass
         self.is_resign = is_resign
-        self.captured_stones = []  # List of (y, x) coordinates of captured stones
-        self.previous_zobrist_hash = None  # To restore the hash when undoing
-        self.previous_position_history = None  # To restore position history
+        self.captured_stones = []
+        self.previous_zobrist_hash = None
+        self.previous_position_history = None
         
     def __str__(self) -> str:
         if self.is_pass: return f"{'Black' if self.color == BLACK else 'White'} Pass"
@@ -28,7 +28,7 @@ class MoveStack:
         """Push a move onto the stack and apply it to the board"""
         move.previous_zobrist_hash = self.board.current_hash
         move.previous_position_history = deepcopy(self.board.position_history)
-        if move.is_pass or move.is_resign: # Handle pass and resign
+        if move.is_pass or move.is_resign:
             self.moves = self.moves[:self.current_index + 1]
             self.moves.append(move)
             self.current_index += 1
@@ -61,10 +61,9 @@ class MoveStack:
         self.board.board[move.y, move.x] = EMPTY
         opponent = WHITE if move.color == BLACK else BLACK
         for y, x in move.captured_stones: self.board.board[y, x] = opponent
-        # Restore Zobrist hash and position history (fixed redundant assignment)
         self.board.current_hash = move.previous_zobrist_hash
         self.board.position_history = move.previous_position_history
-        self.board._get_liberties.cache_clear() # Clear LRU cache
+        self.board._get_liberties.cache_clear()
         return move
         
     def peek(self) -> Move:
@@ -81,22 +80,20 @@ class MoveStack:
         """Move forward in the move stack (redo)"""
         if self.current_index + 1 >= len(self.moves): return False
         next_move = self.moves[self.current_index + 1]
-        # Apply the move (without adding it to the stack again)
         if next_move.is_pass or next_move.is_resign:
             self.current_index += 1
             return True
         self.board.board[next_move.y, next_move.x] = next_move.color
-        # Recalculate Zobrist hash
         self.board.current_hash = next_move.previous_zobrist_hash
         self.board.current_hash ^= self.board.zobrist_table[next_move.y, next_move.x, next_move.color - 1]
         opponent = WHITE if next_move.color == BLACK else BLACK
-        for y, x in next_move.captured_stones: # Handle captures
+        for y, x in next_move.captured_stones:
             self.board.board[y, x] = EMPTY
             self.board.current_hash ^= self.board.zobrist_table[y, x, opponent - 1]
         self.board.position_history = deepcopy(next_move.previous_position_history)
         self.board.position_history.add(self.board.current_hash)
         self.current_index += 1
-        self.board._get_liberties.cache_clear() # Clear LRU cache
+        self.board._get_liberties.cache_clear()
         return True
         
     def back(self) -> bool:
@@ -107,7 +104,6 @@ class MoveStack:
         """Undo all moves and return to the root state"""
         moves_undone = 0
         while self.pop() is not None: moves_undone += 1
-        return moves_undone
         
     def to_end(self) -> int:
         """Redo all moves and go to the end of the stack"""
