@@ -5,7 +5,7 @@ from collections import deque
 EMPTY = 0
 BLACK = 1
 WHITE = 2
-OFFBOARD = 3  # Used for padding
+OFFBOARD = 3
 DIRECTIONS = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
 class Board:
@@ -17,11 +17,10 @@ class Board:
         self.black_captures = 0
         self.white_captures = 0
         self.position_history = set()
-        # Initialize Zobrist hash table for fast position hashing
         np.random.seed(0)
         self.zobrist_table = np.random.randint(1, 2**63 - 1, size=(size + 2, size + 2, 3), dtype=np.int64)
         self.current_hash = 0
-        self._update_position_hash()  # Now call this after initializing the hash table
+        self._update_position_hash()
         
     def _update_position_hash(self) -> None:
         """Update and store the current board position hash"""
@@ -41,6 +40,7 @@ class Board:
         self.current_hash = 0
         self._update_position_hash()
     
+    @lru_cache(maxsize=1024)
     def _get_group(self, y: int, x: int) -> set[tuple[int, int]]:
         """Find all connected stones of the same color"""
         color = self.board[y, x]
@@ -57,7 +57,7 @@ class Board:
                     if (self.board[ny, nx] == color and (ny, nx) not in visited): queue.append((ny, nx))
         return visited
     
-    @lru_cache(maxsize=4096)
+    @lru_cache(maxsize=1024)
     def _get_liberties(self, group: frozenset[tuple[int, int]]) -> set[tuple[int, int]]:
         """Count the liberties (empty adjacent points) of a group"""
         liberties = set()
@@ -68,10 +68,10 @@ class Board:
                     if self.board[ny, nx] == EMPTY: liberties.add((ny, nx))
         return liberties
     
-    def is_valid_move(self, y: int, x: int, color: int) -> bool:
+    def is_valid_move(self, y: int, x: int, color: int) -> tuple[bool, str]:
         """Check if placing a stone at (y, x) is a valid move"""
-        if not (1 <= y <= self.size and 1 <= x <= self.size): return False
-        if self.board[y, x] != EMPTY: return False            
+        if not (1 <= y <= self.size and 1 <= x <= self.size): return False, "out of bounds"
+        if self.board[y, x] != EMPTY: return False, "position already occupied"
         temp_board = self.board.copy()
         temp_board[y, x] = color
         opponent = WHITE if color == BLACK else BLACK
@@ -101,36 +101,36 @@ class Board:
                     has_liberties = True
                     break
             if has_liberties: break
-        if not has_liberties and not captured_groups: return False
-        # Check for positional superko - calculate the new board position hash
+        if not has_liberties and not captured_groups: return False, "suicide move"
         new_hash = self.current_hash ^ self.zobrist_table[y, x, color - 1]
         for group in captured_groups:
             for gy, gx in group: new_hash ^= self.zobrist_table[gy, gx, opponent - 1]
-        if new_hash in self.position_history: return False  # Violates positional superko rule
-        return True
+        if new_hash in self.position_history: return False, "ko rule violation"
+        return True, ""
     
     def place_stone(self, y: int, x: int, color: int) -> bool:
         """Place a stone on the board and handle captures"""
-        if not self.is_valid_move(y, x, color): return False
-        self.board[y, x] = color # Place the stone
-        self.current_hash ^= self.zobrist_table[y, x, color - 1] # Update Zobrist hash
-        opponent = WHITE if color == BLACK else BLACK # Check for captures
+        is_valid, _ = self.is_valid_move(y, x, color)
+        if not is_valid: return False
+        self.board[y, x] = color
+        self.current_hash ^= self.zobrist_table[y, x, color - 1]
+        opponent = WHITE if color == BLACK else BLACK
         captured_stones = 0
-        for dy, dx in DIRECTIONS: # Check adjacent groups for captures
+        for dy, dx in DIRECTIONS:
             ny, nx = y + dy, x + dx
             if self.board[ny, nx] == opponent:
                 group = self._get_group(ny, nx)
                 liberties = self._get_liberties(frozenset(group))
                 if not liberties:
                     for gy, gx in group:
-                        # Update Zobrist hash by removing stones
                         self.current_hash ^= self.zobrist_table[gy, gx, opponent - 1]
                         self.board[gy, gx] = EMPTY
                     captured_stones += len(group)
         if color == BLACK: self.black_captures += captured_stones
         else: self.white_captures += captured_stones
-        self.position_history.add(self.current_hash) # Update position history for ko detection
-        self._get_liberties.cache_clear() # Clear LRU cache since the board has changed
+        self.position_history.add(self.current_hash)
+        self._get_liberties.cache_clear()
+        self._get_group.cache_clear()
         return True
     
     def get_legal_moves(self, color: int) -> list[tuple[int, int]]:
@@ -138,7 +138,8 @@ class Board:
         legal_moves = []
         for y in range(1, self.size + 1):
             for x in range(1, self.size + 1):
-                if self.is_valid_move(y, x, color): legal_moves.append((y, x))
+                is_valid, _ = self.is_valid_move(y, x, color)
+                if is_valid: legal_moves.append((y, x))
         return legal_moves
     
     def __str__(self) -> str:
