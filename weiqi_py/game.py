@@ -13,7 +13,7 @@ class Game:
         if not isinstance(komi, (int, float)): raise ValueError(f"Invalid komi: {komi}.")
         if score_system not in ["area", "territory"]: raise ValueError(f"Invalid scoring system: {score_system}.")
         self.board = Board(size=board_size)
-        self.current_player = BLACK  # Black goes first
+        self.current_player = BLACK
         self.komi = komi
         self.moves_history = []
         self.is_game_over = False
@@ -25,7 +25,7 @@ class Game:
     def play(self, y=None, x=None) -> bool:
         """Make a move at the given coordinates, or pass if coordinates are None"""
         if self.is_game_over: raise GameError("Game is already over, no more moves allowed")
-        if y is None or x is None: # Pass move
+        if y is None or x is None:
             move = Move(color=self.current_player, is_pass=True)
             result = self.move_stack.push(move)
             if result:
@@ -47,11 +47,11 @@ class Game:
                 else: raise InvalidMoveError(f"Move at ({y}, {x}) violates ko rule.")
             raise InvalidMoveError(f"Invalid move at ({y}, {x}) for unknown reason")
         self.moves_history.append((y, x))
-        self.passes = 0  # Reset pass counter
+        self.passes = 0
         self.current_player = BLACK if self.current_player == WHITE else WHITE
         return True
     
-    def _would_be_suicide(self, y, x, color):
+    def _would_be_suicide(self, y: int, x: int, color: tuple[int, int]) -> bool:
         """Determine if a move would be a suicide move"""
         temp_board = self.board.board.copy()
         temp_board[y, x] = color
@@ -62,7 +62,7 @@ class Game:
             for dy, dx in [(-1, 0), (0, 1), (1, 0), (0, -1)]:
                 ny, nx = cy + dy, cx + dx
                 if temp_board[ny, nx] == EMPTY:
-                    return False  # Not suicide, has a liberty
+                    return False
                 if temp_board[ny, nx] == color and (ny, nx) not in group:
                     group.add((ny, nx))
                     queue.append((ny, nx))
@@ -106,10 +106,10 @@ class Game:
         black_score, white_score = self.get_score()
         if black_score > white_score: self.winner = BLACK
         elif white_score > black_score: self.winner = WHITE
-        else: self.winner = 0  # Draw
+        else: self.winner = 0
         return self.winner
     
-    def get_score(self) -> tuple[int, int]:
+    def get_score(self) -> tuple[float, float]:
         """Calculate the score based on the selected scoring system"""
         try:
             if self.score_system == "area": return self._get_area_score()
@@ -127,7 +127,7 @@ class Game:
         black_territory = 0
         white_territory = 0
         directions = np.array([(-1, 0), (0, 1), (1, 0), (0, -1)])
-        for y in range(1, size + 1): # Process all empty points
+        for y in range(1, size + 1):
             for x in range(1, size + 1):
                 if board[y, x] == EMPTY and not visited[y, x]:
                     queue = deque([(y, x)])
@@ -186,7 +186,6 @@ class Game:
             new_game.board.black_captures = self.board.black_captures
             new_game.board.white_captures = self.board.white_captures
             new_game.board.current_hash = self.board.current_hash
-            # Create a copy of the position history set to avoid sharing references
             new_game.board.position_history = self.board.position_history.copy()
             new_game.current_player = self.current_player
             new_game.moves_history = self.moves_history.copy()
@@ -205,7 +204,7 @@ class Game:
         self.is_game_over = False
         self.passes = 0
         self.winner = None
-        self.move_stack = MoveStack(self.board)  # Create a new move stack
+        self.move_stack = MoveStack(self.board)
         
     def get_current_state(self) -> int:
         """Get a compact representation of the current game state"""
