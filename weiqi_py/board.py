@@ -40,7 +40,7 @@ class Board:
         self.current_hash = 0
         self._update_position_hash()
     
-    @lru_cache(maxsize=1024)
+    #@lru_cache(maxsize=1024)
     def _get_group(self, y: int, x: int) -> set[tuple[int, int]]:
         """Find all connected stones of the same color"""
         color = self.board[y, x]
@@ -57,7 +57,7 @@ class Board:
                     if (self.board[ny, nx] == color and (ny, nx) not in visited): queue.append((ny, nx))
         return visited
     
-    @lru_cache(maxsize=1024)
+    #@lru_cache(maxsize=1024)
     def _get_liberties(self, group: frozenset[tuple[int, int]]) -> set[tuple[int, int]]:
         """Count the liberties (empty adjacent points) of a group"""
         liberties = set()
@@ -81,9 +81,11 @@ class Board:
             if temp_board[ny, nx] == opponent:
                 group = self._get_group(ny, nx)
                 liberties = self._get_liberties(frozenset(group))
-                if not liberties:captured_groups.append(group)
+                if not liberties:
+                    captured_groups.append(group)
         for group in captured_groups:
-            for gy, gx in group: temp_board[gy, gx] = EMPTY
+            for gy, gx in group: 
+                temp_board[gy, gx] = EMPTY
         group = set()
         queue = deque([(y, x)])
         while queue:
@@ -92,7 +94,8 @@ class Board:
             group.add((cy, cx))
             for dy, dx in DIRECTIONS:
                 ny, nx = cy + dy, cx + dx
-                if temp_board[ny, nx] == color and (ny, nx) not in group: queue.append((ny, nx))
+                if temp_board[ny, nx] == color and (ny, nx) not in group: 
+                    queue.append((ny, nx))
         has_liberties = False
         for gy, gx in group:
             for dy, dx in DIRECTIONS:
@@ -104,7 +107,8 @@ class Board:
         if not has_liberties and not captured_groups: return False, "suicide move"
         new_hash = self.current_hash ^ self.zobrist_table[y, x, color - 1]
         for group in captured_groups:
-            for gy, gx in group: new_hash ^= self.zobrist_table[gy, gx, opponent - 1]
+            for gy, gx in group: 
+                new_hash ^= self.zobrist_table[gy, gx, opponent - 1]
         if new_hash in self.position_history: return False, "ko rule violation"
         return True, ""
     
@@ -116,21 +120,25 @@ class Board:
         self.current_hash ^= self.zobrist_table[y, x, color - 1]
         opponent = WHITE if color == BLACK else BLACK
         captured_stones = 0
+        captured_groups = []
         for dy, dx in DIRECTIONS:
             ny, nx = y + dy, x + dx
             if self.board[ny, nx] == opponent:
                 group = self._get_group(ny, nx)
                 liberties = self._get_liberties(frozenset(group))
                 if not liberties:
-                    for gy, gx in group:
-                        self.current_hash ^= self.zobrist_table[gy, gx, opponent - 1]
-                        self.board[gy, gx] = EMPTY
-                    captured_stones += len(group)
+                    captured_groups.append(group)
+        for group in captured_groups:
+            for gy, gx in group:
+                self.current_hash ^= self.zobrist_table[gy, gx, opponent - 1]
+                self.board[gy, gx] = EMPTY
+                captured_stones += 1
         if color == BLACK: self.black_captures += captured_stones
         else: self.white_captures += captured_stones
         self.position_history.add(self.current_hash)
-        self._get_liberties.cache_clear()
-        self._get_group.cache_clear()
+        # self._get_liberties.cache_clear()
+        # self._get_group.cache_clear()
+        
         return True
     
     def get_legal_moves(self, color: int) -> list[tuple[int, int]]:
