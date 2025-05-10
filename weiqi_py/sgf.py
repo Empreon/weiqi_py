@@ -60,10 +60,10 @@ class SGFParser:
             node = node.strip()
             if not node: continue
             if node.startswith(';'):
-                if current_node != root: current_node = current_node.add_child()
-                properties = re.findall(r'([A-Za-z]+)(?:\[(.*?)\])+', node)
-                for key, value in properties:
-                    value = value.replace('\\\\', '\\').replace('\\]', ']')
+                if node != nodes[0]:  current_node = current_node.add_child()
+                prop_matches = re.findall(r'([A-Za-z]+)(?:\[(.*?[^\\])\])+', node)
+                for key, value in prop_matches:
+                    value = value.replace('\\]', ']').replace('\\\\', '\\')
                     current_node.add_property(key, value)
             elif node.startswith('('):
                 parent = current_node.parent or root
@@ -81,7 +81,6 @@ class SGFParser:
             try: komi = float(sgf_root.get_property('KM'))
             except ValueError: pass
         game = Game(board_size=board_size, komi=komi)
-        current_node = sgf_root
         if sgf_root.has_property('HA') and sgf_root.has_property('AB'):
             handicap = int(sgf_root.get_property('HA'))
             if handicap > 0:
@@ -89,38 +88,60 @@ class SGFParser:
                 for stone in stones:
                     if not stone: continue
                     row, col = sgf_to_coord(stone, board_size)
-                    if 1 <= row <= board_size and 1 <= col <= board_size: game.board.place_stone(row, col, BLACK)
+                    if 1 <= row <= board_size and 1 <= col <= board_size:
+                        game.board.place_stone(row, col, BLACK)
                 game.current_player = WHITE
+        current_node = sgf_root
         invalid_moves_count = 0
-        while current_node.children:
+        while True:
+            if not current_node.children: break  
             current_node = current_node.children[0]
             if current_node.has_property('B'):
                 color = BLACK
                 move_str = current_node.get_property('B')
+                if not move_str or move_str == '':
+                    if game.current_player == color: game.play(None, None)
+                    else: print(f"Warning: Skipping pass move for {color}, expected {game.current_player}")
+                    continue
+                try:
+                    row, col = sgf_to_coord(move_str, board_size)
+                    if not (1 <= row <= board_size and 1 <= col <= board_size):
+                        print(f"Warning: Invalid coordinates ({row},{col}), skipping")
+                        invalid_moves_count += 1
+                        continue
+                    if game.current_player != color:
+                        print(f"Warning: Incorrect player turn (got {color}, expected {game.current_player}), skipping")
+                        invalid_moves_count += 1
+                        continue
+                    if not game.play(row, col):
+                        print(f"Warning: Invalid move at ({row},{col}) for {color}, skipping")
+                        invalid_moves_count += 1
+                except Exception as e:
+                    print(f"Error processing move {move_str}: {e}")
+                    invalid_moves_count += 1
             elif current_node.has_property('W'):
                 color = WHITE
                 move_str = current_node.get_property('W')
-            else: continue
-            if not move_str or move_str == '':
-                if game.current_player == color: game.play(None, None)
-                else: print(f"Warning: Skipping pass move for {color}, expected {game.current_player}")
-                continue
-            try:
-                row, col = sgf_to_coord(move_str, board_size)
-                if not (1 <= row <= board_size and 1 <= col <= board_size):
-                    print(f"Warning: Invalid coordinates ({row},{col}), skipping")
-                    invalid_moves_count += 1
+                if not move_str or move_str == '':
+                    if game.current_player == color: game.play(None, None)
+                    else: print(f"Warning: Skipping pass move for {color}, expected {game.current_player}")
                     continue
-                if game.current_player != color:
-                    print(f"Warning: Incorrect player turn (got {color}, expected {game.current_player}), skipping")
+                try:
+                    row, col = sgf_to_coord(move_str, board_size)
+                    if not (1 <= row <= board_size and 1 <= col <= board_size):
+                        print(f"Warning: Invalid coordinates ({row},{col}), skipping")
+                        invalid_moves_count += 1
+                        continue  
+                    if game.current_player != color:
+                        print(f"Warning: Incorrect player turn (got {color}, expected {game.current_player}), skipping")
+                        invalid_moves_count += 1
+                        continue
+                    if not game.play(row, col):
+                        print(f"Warning: Invalid move at ({row},{col}) for {color}, skipping")
+                        invalid_moves_count += 1
+                except Exception as e:
+                    print(f"Error processing move {move_str}: {e}")
                     invalid_moves_count += 1
-                    continue
-                if not game.play(row, col):
-                    print(f"Warning: Invalid move at ({row},{col}) for {color}, skipping")
-                    invalid_moves_count += 1
-            except Exception as e:
-                print(f"Error processing move {move_str}: {e}")
-                invalid_moves_count += 1
         if invalid_moves_count > 0: print(f"Completed parsing with {invalid_moves_count} invalid/skipped moves")
         return game
         
