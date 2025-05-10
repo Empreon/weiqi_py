@@ -137,8 +137,8 @@ class Game:
         board = self.board.board
         size = self.board.size
         black_territory, white_territory, black_stones, white_stones = self._optimized_flood_fill(board, size)
-        black_score = black_territory + black_stones
-        white_score = white_territory + white_stones + self.komi
+        black_score = float(black_territory + black_stones)
+        white_score = float(white_territory + white_stones + self.komi)
         return black_score, white_score
 
     def _get_territory_score(self) -> tuple[float, float]:
@@ -148,8 +148,8 @@ class Game:
         black_territory, white_territory, _, _ = self._optimized_flood_fill(board, size)
         black_prisoners = self.board.white_captures
         white_prisoners = self.board.black_captures
-        black_score = black_territory + black_prisoners
-        white_score = white_territory + white_prisoners + self.komi
+        black_score = float(black_territory + black_prisoners)
+        white_score = float(white_territory + white_prisoners + self.komi)
         return black_score, white_score
 
     def get_winner(self) -> int:
