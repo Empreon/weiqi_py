@@ -1,7 +1,11 @@
+"""
+Core board representation and game logic for Weiqi (Go).
+"""
+
 import numpy as np
-from functools import lru_cache
 from collections import deque
 
+# Constants for board states
 EMPTY = 0
 BLACK = 1
 WHITE = 2
@@ -9,73 +13,133 @@ OFFBOARD = 3
 DIRECTIONS = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
 class Board:
+    """
+    Represents a Weiqi (Go) board with game logic.
+    
+    The board uses a numpy array with padding for efficient boundary checking.
+    Coordinates are 1-based for the actual board area, with 0 and size+1 being
+    the padding areas marked as OFFBOARD.
+    """
+    
     def __init__(self, size=19) -> None:
+        """
+        Initialize a new board.
+        
+        Args:
+            size (int): Board size (default: 19)
+        """
         self.size = size
+        # Initialize board with padding for boundary checking
         self.board = np.zeros((size + 2, size + 2), dtype=np.int8)
         self.board[0, :] = self.board[-1, :] = OFFBOARD
         self.board[:, 0] = self.board[:, -1] = OFFBOARD
+        
+        # Game state tracking
         self.black_captures = 0
         self.white_captures = 0
         self.position_history = set()
+        
+        # Initialize Zobrist hashing for position tracking
         np.random.seed(0)
         self.zobrist_table = np.random.randint(1, 2**63 - 1, size=(size + 2, size + 2, 3), dtype=np.int64)
         self.current_hash = 0
         self._update_position_hash()
-        
+
     def _update_position_hash(self) -> None:
-        """Update and store the current board position hash"""
+        """Update the Zobrist hash for the current board position."""
         self.current_hash = 0
         for y in range(1, self.size + 1):
             for x in range(1, self.size + 1):
                 stone = self.board[y, x]
-                if stone > 0: self.current_hash ^= self.zobrist_table[y, x, stone - 1]
+                if stone > 0: 
+                    self.current_hash ^= self.zobrist_table[y, x, stone - 1]
         self.position_history.add(self.current_hash)
-    
+
     def reset(self) -> None:
-        """Reset the board to an empty state"""
+        """Reset the board to its initial empty state."""
         self.board[1:-1, 1:-1] = EMPTY
         self.black_captures = 0
         self.white_captures = 0
         self.position_history = set()
         self.current_hash = 0
         self._update_position_hash()
-    
-    #@lru_cache(maxsize=1024)
+
     def _get_group(self, y: int, x: int) -> set[tuple[int, int]]:
-        """Find all connected stones of the same color"""
+        """
+        Find all connected stones of the same color using BFS.
+        
+        Args:
+            y (int): Starting row coordinate
+            x (int): Starting column coordinate
+            
+        Returns:
+            set[tuple[int, int]]: Set of coordinates belonging to the group
+        """
         color = self.board[y, x]
-        if color == EMPTY or color == OFFBOARD: return set()
+        if color == EMPTY or color == OFFBOARD: 
+            return set()
+            
         visited = set()
         queue = deque([(y, x)])
+        
         while queue:
             cy, cx = queue.popleft()
-            if (cy, cx) in visited: continue
+            if (cy, cx) in visited: 
+                continue
+                
             visited.add((cy, cx))
             for dy, dx in DIRECTIONS:
                 ny, nx = cy + dy, cx + dx
-                if 0 <= ny < self.size + 2 and 0 <= nx < self.size + 2:
-                    if (self.board[ny, nx] == color and (ny, nx) not in visited): queue.append((ny, nx))
+                if (0 <= ny < self.size + 2 and 0 <= nx < self.size + 2 and
+                    self.board[ny, nx] == color and (ny, nx) not in visited):
+                    queue.append((ny, nx))
+                    
         return visited
-    
-    #@lru_cache(maxsize=1024)
+
     def _get_liberties(self, group: frozenset[tuple[int, int]]) -> set[tuple[int, int]]:
-        """Count the liberties (empty adjacent points) of a group"""
+        """
+        Count the liberties (empty adjacent points) of a group.
+        
+        Args:
+            group (frozenset[tuple[int, int]]): Set of coordinates in the group
+            
+        Returns:
+            set[tuple[int, int]]: Set of liberty coordinates
+        """
         liberties = set()
         for y, x in group:
             for dy, dx in DIRECTIONS:
                 ny, nx = y + dy, x + dx
-                if 0 <= ny < self.size + 2 and 0 <= nx < self.size + 2: 
-                    if self.board[ny, nx] == EMPTY: liberties.add((ny, nx))
+                if (0 <= ny < self.size + 2 and 0 <= nx < self.size + 2 and 
+                    self.board[ny, nx] == EMPTY):
+                    liberties.add((ny, nx))
         return liberties
-    
+
     def is_valid_move(self, y: int, x: int, color: int) -> tuple[bool, str]:
-        """Check if placing a stone at (y, x) is a valid move"""
-        if not (1 <= y <= self.size and 1 <= x <= self.size): return False, "out of bounds"
-        if self.board[y, x] != EMPTY: return False, "position already occupied"
+        """
+        Check if placing a stone at (y, x) is a valid move.
+        
+        Args:
+            y (int): Row coordinate
+            x (int): Column coordinate
+            color (int): Color of the stone (BLACK or WHITE)
+            
+        Returns:
+            tuple[bool, str]: (is_valid, reason) where reason is empty if valid
+        """
+        # Basic move validation
+        if not (1 <= y <= self.size and 1 <= x <= self.size):
+            return False, "out of bounds"
+        if self.board[y, x] != EMPTY:
+            return False, "position already occupied"
+
+        # Simulate move and check captures
         temp_board = self.board.copy()
         temp_board[y, x] = color
         opponent = WHITE if color == BLACK else BLACK
         captured_groups = []
+        
+        # Check for captures
         for dy, dx in DIRECTIONS:
             ny, nx = y + dy, x + dx
             if temp_board[ny, nx] == opponent:
@@ -83,19 +147,27 @@ class Board:
                 liberties = self._get_liberties(frozenset(group))
                 if not liberties:
                     captured_groups.append(group)
+
+        # Remove captured stones
         for group in captured_groups:
-            for gy, gx in group: 
+            for gy, gx in group:
                 temp_board[gy, gx] = EMPTY
+
+        # Check if the move creates a group with liberties
         group = set()
         queue = deque([(y, x)])
         while queue:
             cy, cx = queue.popleft()
-            if (cy, cx) in group: continue
+            if (cy, cx) in group:
+                continue
             group.add((cy, cx))
             for dy, dx in DIRECTIONS:
                 ny, nx = cy + dy, cx + dx
-                if temp_board[ny, nx] == color and (ny, nx) not in group: 
+                if (temp_board[ny, nx] == color and 
+                    (ny, nx) not in group):
                     queue.append((ny, nx))
+
+        # Check for liberties
         has_liberties = False
         for gy, gx in group:
             for dy, dx in DIRECTIONS:
@@ -103,24 +175,47 @@ class Board:
                 if temp_board[ny, nx] == EMPTY:
                     has_liberties = True
                     break
-            if has_liberties: break
-        if not has_liberties and not captured_groups: return False, "suicide move"
+            if has_liberties:
+                break
+
+        if not has_liberties and not captured_groups:
+            return False, "suicide move"
+
+        # Check for ko rule violation
         new_hash = self.current_hash ^ self.zobrist_table[y, x, color - 1]
         for group in captured_groups:
-            for gy, gx in group: 
+            for gy, gx in group:
                 new_hash ^= self.zobrist_table[gy, gx, opponent - 1]
-        if new_hash in self.position_history: return False, "ko rule violation"
+        if new_hash in self.position_history:
+            return False, "ko rule violation"
+
         return True, ""
-    
+
     def place_stone(self, y: int, x: int, color: int) -> bool:
-        """Place a stone on the board and handle captures"""
+        """
+        Place a stone on the board and handle captures.
+        
+        Args:
+            y (int): Row coordinate
+            x (int): Column coordinate
+            color (int): Color of the stone (BLACK or WHITE)
+            
+        Returns:
+            bool: True if the move was successful
+        """
         is_valid, _ = self.is_valid_move(y, x, color)
-        if not is_valid: return False
+        if not is_valid:
+            return False
+
+        # Place the stone
         self.board[y, x] = color
         self.current_hash ^= self.zobrist_table[y, x, color - 1]
+        
+        # Handle captures
         opponent = WHITE if color == BLACK else BLACK
         captured_stones = 0
         captured_groups = []
+        
         for dy, dx in DIRECTIONS:
             ny, nx = y + dy, x + dx
             if self.board[ny, nx] == opponent:
@@ -128,35 +223,56 @@ class Board:
                 liberties = self._get_liberties(frozenset(group))
                 if not liberties:
                     captured_groups.append(group)
+
+        # Remove captured stones
         for group in captured_groups:
             for gy, gx in group:
                 self.current_hash ^= self.zobrist_table[gy, gx, opponent - 1]
                 self.board[gy, gx] = EMPTY
                 captured_stones += 1
-        if color == BLACK: self.black_captures += captured_stones
-        else: self.white_captures += captured_stones
+
+        # Update capture counts
+        if color == BLACK:
+            self.black_captures += captured_stones
+        else:
+            self.white_captures += captured_stones
+
         self.position_history.add(self.current_hash)
-        # self._get_liberties.cache_clear()
-        # self._get_group.cache_clear()
-        
         return True
-    
+
     def get_legal_moves(self, color: int) -> list[tuple[int, int]]:
-        """Get all legal moves for the current player"""
+        """
+        Get all legal moves for the current player.
+        
+        Args:
+            color (int): Color of the player (BLACK or WHITE)
+            
+        Returns:
+            list[tuple[int, int]]: List of valid move coordinates
+        """
         legal_moves = []
         for y in range(1, self.size + 1):
             for x in range(1, self.size + 1):
                 is_valid, _ = self.is_valid_move(y, x, color)
-                if is_valid: legal_moves.append((y, x))
+                if is_valid:
+                    legal_moves.append((y, x))
         return legal_moves
-    
+
     def __str__(self) -> str:
-        """String representation of the board for display"""
+        """
+        String representation of the board for display.
+        
+        Returns:
+            str: Board representation with B for black, W for white, and . for empty
+        """
         result = ""
         for y in range(1, self.size + 1):
             for x in range(1, self.size + 1):
-                if self.board[y, x] == EMPTY: result += ". "
-                elif self.board[y, x] == BLACK: result += "B "
-                elif self.board[y, x] == WHITE: result += "W "
+                if self.board[y, x] == EMPTY:
+                    result += ". "
+                elif self.board[y, x] == BLACK:
+                    result += "B "
+                elif self.board[y, x] == WHITE:
+                    result += "W "
             result += "\n"
         return result
