@@ -63,8 +63,8 @@ class MoveStack:
         for y, x in move.captured_stones: self.board.board[y, x] = opponent
         self.board.current_hash = move.previous_zobrist_hash
         self.board.position_history = move.previous_position_history
-        self.board._get_liberties.cache_clear()
-        self.board._get_group.cache_clear()
+        # self.board._get_liberties.cache_clear()
+        # self.board._get_group.cache_clear()
         return move
         
     def peek(self) -> Move:
@@ -94,8 +94,8 @@ class MoveStack:
         self.board.position_history = deepcopy(next_move.previous_position_history)
         self.board.position_history.add(self.board.current_hash)
         self.current_index += 1
-        self.board._get_liberties.cache_clear()
-        self.board._get_group.cache_clear()
+        # self.board._get_liberties.cache_clear()
+        # self.board._get_group.cache_clear()
         return True
         
     def back(self) -> bool:
