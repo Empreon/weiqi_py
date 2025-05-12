@@ -1,15 +1,27 @@
 """
 Core game logic and state management for Weiqi (Go).
+
+This module provides the main game interface, handling move validation,
+scoring, and game state management.
 """
 
 import numpy as np
 from collections import deque
-from .board import Board, BLACK, WHITE, EMPTY
+from typing import Optional, List, Tuple
+from .board import Board, BLACK, WHITE, EMPTY, GoError
 from .move import Move, MoveStack
 
-class GameError(Exception): pass
-class InvalidMoveError(GameError): pass
-class ScoringError(GameError): pass
+class GameError(GoError): 
+    """Base exception for game-related errors."""
+    pass
+
+class InvalidMoveError(GameError): 
+    """Exception raised for invalid moves."""
+    pass
+
+class ScoringError(GameError): 
+    """Exception raised for scoring-related errors."""
+    pass
 
 class Game:
     """
@@ -19,7 +31,7 @@ class Game:
     and game rules enforcement.
     """
     
-    def __init__(self, board_size=19, komi=6.5, score_system="area") -> None:
+    def __init__(self, board_size: int = 19, komi: float = 6.5, score_system: str = "area") -> None:
         """
         Initialize a new game.
         
@@ -32,29 +44,29 @@ class Game:
             ValueError: If parameters are invalid
         """
         if not isinstance(board_size, int) or board_size < 5 or board_size > 25:
-            raise ValueError(f"Invalid board size: {board_size}.")
-        if not isinstance(komi, (int, float)):
-            raise ValueError(f"Invalid komi: {komi}.")
+            raise ValueError(f"Invalid board size: {board_size}. Must be between 5 and 25.")
+        if not isinstance(komi, (int, float)) or komi < 0:
+            raise ValueError(f"Invalid komi: {komi}. Must be a non-negative number.")
         if score_system not in ["area", "territory"]:
-            raise ValueError(f"Invalid scoring system: {score_system}.")
+            raise ValueError(f"Invalid scoring system: {score_system}. Must be 'area' or 'territory'.")
             
         self.board = Board(size=board_size)
         self.current_player = BLACK
         self.komi = komi
-        self.moves_history = []
+        self.moves_history: List[Tuple[int, int] | str] = []
         self.is_game_over = False
         self.passes = 0
         self.move_stack = MoveStack(self.board)
         self.score_system = score_system
-        self.winner = None
+        self.winner: Optional[int] = None
 
-    def play(self, y=None, x=None) -> bool:
+    def play(self, y: Optional[int] = None, x: Optional[int] = None) -> bool:
         """
         Make a move at the given coordinates, or pass if coordinates are None.
         
         Args:
-            y (int, optional): Row coordinate
-            x (int, optional): Column coordinate
+            y (Optional[int]): Row coordinate
+            x (Optional[int]): Column coordinate
             
         Returns:
             bool: True if the move was successful
@@ -62,6 +74,7 @@ class Game:
         Raises:
             GameError: If the game is already over
             InvalidMoveError: If the move is invalid
+            ValueError: If coordinates are invalid
         """
         if self.is_game_over:
             raise GameError("Game is already over, no more moves allowed")
@@ -81,21 +94,21 @@ class Game:
             
         # Handle stone placement
         if not isinstance(y, int) or not isinstance(x, int):
-            raise InvalidMoveError(f"Invalid coordinates: ({y}, {x}).")
+            raise ValueError(f"Invalid coordinates: ({y}, {x}). Must be integers.")
             
-        is_valid, reason = self.board.is_valid_move(y, x, self.current_player)
-        if not is_valid:
-            raise InvalidMoveError(f"Invalid move at ({y}, {x}): {reason}")
-            
-        move = Move(y=y, x=x, color=self.current_player)
-        result = self.move_stack.push(move)
-        if not result:
-            raise InvalidMoveError(f"Invalid move at ({y}, {x}): failed to apply move")
-            
-        self.moves_history.append((y, x))
-        self.passes = 0
-        self.current_player = BLACK if self.current_player == WHITE else WHITE
-        return True
+        try:
+            self.board.place_stone(y, x, self.current_player)
+            move = Move(y=y, x=x, color=self.current_player)
+            result = self.move_stack.push(move)
+            if not result:
+                raise InvalidMoveError(f"Failed to apply move at ({y}, {x})")
+                
+            self.moves_history.append((y, x))
+            self.passes = 0
+            self.current_player = BLACK if self.current_player == WHITE else WHITE
+            return True
+        except GoError as e:
+            raise InvalidMoveError(str(e))
     
     def undo(self) -> bool:
         """
@@ -103,9 +116,12 @@ class Game:
         
         Returns:
             bool: True if a move was undone
+            
+        Raises:
+            GameError: If there are no moves to undo
         """
         if not self.moves_history:
-            return False
+            raise GameError("No moves to undo")
             
         move = self.move_stack.pop()
         if move:
@@ -119,25 +135,26 @@ class Game:
             return True
         return False
     
-    def resign(self, color=None) -> bool:
+    def resign(self, color: Optional[int] = None) -> bool:
         """
         Resign the game for the given player or current player.
         
         Args:
-            color (int, optional): Color of the resigning player
+            color (Optional[int]): Color of the resigning player
             
         Returns:
             bool: True if resignation was successful
             
         Raises:
             ValueError: If color is invalid
+            GameError: If the game is already over
         """
         if self.is_game_over:
-            return False
+            raise GameError("Game is already over")
             
         resign_color = color if color is not None else self.current_player
         if resign_color not in [BLACK, WHITE]:
-            raise ValueError(f"Invalid color for resignation: {resign_color}.")
+            raise ValueError(f"Invalid color for resignation: {resign_color}. Must be BLACK or WHITE.")
             
         move = Move(color=resign_color, is_resign=True)
         result = self.move_stack.push(move)
@@ -148,15 +165,18 @@ class Game:
             return True
         return False
     
-    def get_legal_moves(self) -> list[tuple[int, int]]:
+    def get_legal_moves(self) -> List[Tuple[int, int]]:
         """
         Get all legal moves for the current player.
         
         Returns:
-            list[tuple[int, int]]: List of valid move coordinates
+            List[Tuple[int, int]]: List of valid move coordinates
+            
+        Raises:
+            GameError: If the game is over
         """
         if self.is_game_over:
-            return []
+            raise GameError("Game is over, no legal moves available")
         return self.board.get_legal_moves(self.current_player)
     
     def _determine_winner(self) -> int:
@@ -175,12 +195,12 @@ class Game:
             self.winner = 0
         return self.winner
     
-    def get_score(self) -> tuple[float, float]:
+    def get_score(self) -> Tuple[float, float]:
         """
         Calculate the score based on the selected scoring system.
         
         Returns:
-            tuple[float, float]: (black_score, white_score)
+            Tuple[float, float]: (black_score, white_score)
             
         Raises:
             ScoringError: If there is an error calculating the score
@@ -195,16 +215,16 @@ class Game:
         except Exception as e:
             raise ScoringError(f"Error calculating score: {e}")
     
-    def _optimized_flood_fill(self, board, size: int) -> tuple[float, float, float, float]:
+    def _optimized_flood_fill(self, board: np.ndarray, size: int) -> Tuple[float, float, float, float]:
         """
         Optimized flood fill for territory calculation using BFS.
         
         Args:
-            board: The game board
+            board (np.ndarray): The game board
             size (int): Board size
             
         Returns:
-            tuple[float, float, float, float]: (black_territory, white_territory, black_stones, white_stones)
+            Tuple[float, float, float, float]: (black_territory, white_territory, black_stones, white_stones)
         """
         black_mask = (board == BLACK)
         white_mask = (board == WHITE)
@@ -248,12 +268,12 @@ class Game:
                         
         return black_territory, white_territory, black_stones, white_stones
     
-    def _get_area_score(self) -> tuple[float, float]:
+    def _get_area_score(self) -> Tuple[float, float]:
         """
         Calculate the score using area scoring (stones + territory).
         
         Returns:
-            tuple[float, float]: (black_score, white_score)
+            Tuple[float, float]: (black_score, white_score)
         """
         board = self.board.board
         size = self.board.size
@@ -262,12 +282,12 @@ class Game:
         white_score = float(white_territory + white_stones + self.komi)
         return black_score, white_score
 
-    def _get_territory_score(self) -> tuple[float, float]:
+    def _get_territory_score(self) -> Tuple[float, float]:
         """
         Calculate the score using territory scoring (Japanese rules).
         
         Returns:
-            tuple[float, float]: (black_score, white_score)
+            Tuple[float, float]: (black_score, white_score)
         """
         board = self.board.board
         size = self.board.size
@@ -278,12 +298,12 @@ class Game:
         white_score = float(white_territory + white_prisoners + self.komi)
         return black_score, white_score
 
-    def get_winner(self) -> int:
+    def get_winner(self) -> Optional[int]:
         """
         Return the winner of the game.
         
         Returns:
-            int: Winner (BLACK, WHITE, or None if game is not over)
+            Optional[int]: Winner (BLACK, WHITE, or None if game is not over)
         """
         if not self.is_game_over:
             return None
@@ -316,7 +336,12 @@ class Game:
             raise GameError(f"Error creating game copy: {e}")
     
     def reset(self) -> None:
-        """Reset the game to initial state."""
+        """
+        Reset the game to initial state.
+        
+        This method clears all stones, resets capture counts, and reinitializes
+        the group manager and position history.
+        """
         self.board.reset()
         self.current_player = BLACK
         self.moves_history = []
