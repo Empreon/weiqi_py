@@ -10,7 +10,7 @@ This module provides functionality to:
 
 import re
 from datetime import datetime
-from .board import BLACK, WHITE, EMPTY
+from .board import BLACK, WHITE
 from .game import Game
 from .utils import coord_to_sgf, sgf_to_coord
 
