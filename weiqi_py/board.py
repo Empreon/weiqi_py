@@ -72,6 +72,8 @@ class GroupManager:
         Raises:
             KeyError: If group_id doesn't exist
         """
+        if group_id not in self.group_stones:
+            raise KeyError(f"Group {group_id} does not exist")
         return self.group_stones[group_id]
         
     def get_group_liberties(self, group_id: int) -> Set[Tuple[int, int]]:
@@ -87,6 +89,8 @@ class GroupManager:
         Raises:
             KeyError: If group_id doesn't exist
         """
+        if group_id not in self.group_liberties:
+            raise KeyError(f"Group {group_id} does not exist")
         return self.group_liberties[group_id]
         
     def create_group(self, y: int, x: int, color: int, board: np.ndarray) -> int:
@@ -205,22 +209,20 @@ class GroupManager:
                 group_id = self.get_group_id(ny, nx)
                 if group_id is not None:
                     affected_groups.add(group_id)
-                    
+
         # Update liberties for each affected group
         for group_id in affected_groups:
             # Remove the placed stone from liberties
             self.group_liberties[group_id].discard((y, x))
             
+            # Get a sample stone from the group to determine its color
+            sample_stone = next(iter(self.group_stones[group_id]))
+            group_color = board[sample_stone[0], sample_stone[1]]
+            
             # If this is an opponent group, check if it's captured
-            if board[y, x] == opponent:
+            if group_color == opponent:
                 if not self.group_liberties[group_id]:
                     self.remove_group(group_id)
-            # If this is a friendly group, add any new liberties from the placed stone
-            elif board[y, x] == color:
-                for dy, dx in DIRECTIONS:
-                    ny, nx = y + dy, x + dx
-                    if 1 <= ny <= self.size and 1 <= nx <= self.size and board[ny, nx] == EMPTY:
-                        self.group_liberties[group_id].add((ny, nx))
 
 class Board:
     """
